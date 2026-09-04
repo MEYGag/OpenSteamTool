@@ -140,6 +140,10 @@ namespace Hooks_Misc {
         if (g_OnlineFixRealAppId) return g_OnlineFixRealAppId;
         return GetAppIDForCurrentPipeWrap();
     }
+
+    bool IsOnlineFixActive() {
+        return g_OnlineFixRealAppId != 0;
+    }
     
     bool EnsureBufferCapacity(CUtlBuffer* pWrite, uint32 newCapacity,bool updatePut)
     {

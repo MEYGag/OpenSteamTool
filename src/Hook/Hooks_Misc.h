@@ -24,6 +24,9 @@ namespace Hooks_Misc {
     // otherwise fall back to GetAppIDForCurrentPipe().
     AppId_t ResolveAppId();
 
+    // True if the current process is running with -onlinefix (480 spoofing).
+    bool IsOnlineFixActive();
+
     // Get localized game name via GetAppDataFromAppInfo (cached).
     std::string GetGameNameByAppID(AppId_t appId);
 

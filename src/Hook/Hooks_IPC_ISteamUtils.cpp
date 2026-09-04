@@ -26,10 +26,13 @@ namespace {
 
     // [Post-Handler]: IClientUtils::GetAppID
     //  SpawnProcess rewrites pGameID to 480 for OnlineFix games,
-    //  so steamclient returns 480.  Restore the real app_id.
-    //  GetAppID reads and updates the response steamclient pre-filled.
+    //  so steamclient returns 480.
+    //  When -onlinefix is active, keep the 480 response so that the game's AppID
+    //  matches the 480 matchmaking lobby created on Steam servers.
     void HandlerPost_IClientUtils_GetAppID(CPipeClient* pipe, CUtlBuffer* pRead, CUtlBuffer* pWrite)
     {
+        if (Hooks_Misc::IsOnlineFixActive()) return;
+
         AppId_t realAppId = Hooks_Misc::ResolveAppId();
         if (!realAppId) return;
 
