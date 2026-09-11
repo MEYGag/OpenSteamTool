@@ -8,10 +8,17 @@
 level = "debug"
 
 [manifest]
-# Which upstream API to query for depot manifest request codes.
-#   "opensteamtool" → https://manifest.opensteamtool.com/{gid}   (default)
-#   "wudrm"         → http://gmrc.wudrm.com/manifest/{gid} (recommended for China users)
-#   "steamrun"      → https://manifest.steam.run/api/manifest/{gid}
+# Which upstream source to query for depot manifests or request codes:
+# 1. Upstream Manifest Request Code API:
+#    "opensteamtool" → https://manifest.opensteamtool.com/{gid}   (default)
+#    "wudrm"         → http://gmrc.wudrm.com/manifest/{gid} (recommended for China users)
+#    "steamrun"      → https://manifest.steam.run/api/manifest/{gid}
+#
+# 2. GitHub Manifest Repository (Automatic Manifest Sync):
+#    Set to a GitHub repository to automatically download branch manifests on install,
+#    decompress them with zlib into <Steam>/depotcache/, and manage manifestcache.lua.
+#    Example: "https://github.com/{username}/{repo}" or "{username}/{repo}"
+#
 # If <Steam>/config/lua/manifest.lua defines fetch_manifest_code(gid) or
 # fetch_manifest_code_ex(app_id, depot_id, gid), those Lua functions take
 # priority over the url setting below.
@@ -45,6 +52,15 @@ level = "debug"
 #     return nil
 # end
 url = "opensteamtool"
+
+# Optional download mirror/proxy for GitHub manifest archives.
+# Supports URL prefix (e.g. "https://ghfast.top/") or templates containing "{url}".
+# mirror = "https://ghfast.top/"
+
+# Periodic background update check interval for installed games (in hours).
+# Checks for newer manifest versions and prunes uninstalled games across Steam restarts.
+# Set to 0 to disable background checks. Default: 24.
+# check_interval = 24
 
 # HTTP timeouts for manifest requests (milliseconds).
 # timeout_resolve_ms  — DNS resolution        (default: 5000)

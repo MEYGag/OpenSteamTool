@@ -12,6 +12,8 @@ namespace {
 
     struct Snapshot {
         std::string manifestProvider = "opensteamtool";
+        std::string manifestMirror;
+        uint32_t manifestCheckIntervalHours = 24;
         ManifestTimeouts manifestTimeouts;
         LogLevel logLevel = LogLevel::Debug;
         std::string logDir;
@@ -24,6 +26,54 @@ namespace {
 
     std::mutex g_mutex;
     bool g_loadedOnce = false;
+
+    GitHubRepoInfo ParseGitHubRepo(std::string_view url) {
+        GitHubRepoInfo info;
+        if (url.empty()) return info;
+
+        std::string s(url);
+        while (!s.empty() && (s.back() == '/' || s.back() == '\\')) {
+            s.pop_back();
+        }
+
+        constexpr std::string_view prefix1 = "https://github.com/";
+        constexpr std::string_view prefix2 = "http://github.com/";
+        constexpr std::string_view prefix3 = "github.com/";
+
+        size_t startPos = 0;
+        if (s.starts_with(prefix1)) {
+            startPos = prefix1.size();
+        } else if (s.starts_with(prefix2)) {
+            startPos = prefix2.size();
+        } else if (s.starts_with(prefix3)) {
+            startPos = prefix3.size();
+        } else {
+            size_t slash = s.find('/');
+            if (slash != std::string::npos && slash > 0 && slash < s.size() - 1 &&
+                s.find('/', slash + 1) == std::string::npos &&
+                s != "opensteamtool" && s != "wudrm" && s != "steamrun") {
+                startPos = 0;
+            } else {
+                return info;
+            }
+        }
+
+        std::string rest = s.substr(startPos);
+        size_t slashPos = rest.find('/');
+        if (slashPos == std::string::npos || slashPos == 0 || slashPos >= rest.size() - 1) {
+            return info;
+        }
+
+        info.owner = rest.substr(0, slashPos);
+        info.repo = rest.substr(slashPos + 1);
+
+        if (info.repo.ends_with(".git")) {
+            info.repo.resize(info.repo.size() - 4);
+        }
+
+        info.isGitHub = !info.owner.empty() && !info.repo.empty();
+        return info;
+    }
 
     const char* ToString(LogLevel level) {
         switch (level) {
@@ -44,23 +94,32 @@ namespace {
     }
 
     void ApplySnapshot(const Snapshot& snapshot) {
-        manifestTimeoutResolve = snapshot.manifestTimeouts.resolve;
-        manifestTimeoutConnect = snapshot.manifestTimeouts.connect;
-        manifestTimeoutSend    = snapshot.manifestTimeouts.send;
-        manifestTimeoutRecv    = snapshot.manifestTimeouts.recv;
-        logLevel               = snapshot.logLevel;
-        logDir                 = snapshot.logDir;
-        luaPaths               = snapshot.luaPaths;
-        remoteUrlTemplate      = snapshot.remoteUrlTemplate;
-        statsEnableApi         = snapshot.statsEnableApi;
-        injectEnabled          = snapshot.injection.enabled;
-        injectLibraryX86       = snapshot.injection.libraryX86;
-        injectLibraryX64       = snapshot.injection.libraryX64;
-        cloudEnabled           = snapshot.cloud.enabled;
-        cloudLibrary           = snapshot.cloud.library;
+        manifestTimeoutResolve     = snapshot.manifestTimeouts.resolve;
+        manifestTimeoutConnect     = snapshot.manifestTimeouts.connect;
+        manifestTimeoutSend        = snapshot.manifestTimeouts.send;
+        manifestTimeoutRecv        = snapshot.manifestTimeouts.recv;
+        manifestUrl                = snapshot.manifestProvider;
+        manifestMirror             = snapshot.manifestMirror;
+        manifestCheckIntervalHours = snapshot.manifestCheckIntervalHours;
+        gitHubRepoInfo             = ParseGitHubRepo(snapshot.manifestProvider);
+        logLevel                   = snapshot.logLevel;
+        logDir                     = snapshot.logDir;
+        luaPaths                   = snapshot.luaPaths;
+        remoteUrlTemplate          = snapshot.remoteUrlTemplate;
+        statsEnableApi             = snapshot.statsEnableApi;
+        injectEnabled              = snapshot.injection.enabled;
+        injectLibraryX86           = snapshot.injection.libraryX86;
+        injectLibraryX64           = snapshot.injection.libraryX64;
+        cloudEnabled               = snapshot.cloud.enabled;
+        cloudLibrary               = snapshot.cloud.library;
     }
 
     void ApplyManifestProvider(const std::string& provider) {
+        auto ghInfo = ParseGitHubRepo(provider);
+        if (ghInfo.isGitHub) {
+            LOG_INFO("Config: manifest URL configured as GitHub repo: {}/{}", ghInfo.owner, ghInfo.repo);
+            return;
+        }
         if (!ManifestClient::SetProvider(provider)) {
             LOG_WARN("Unknown manifest.url \"{}\", keeping default", provider);
             ManifestClient::SetProvider("opensteamtool");
@@ -101,6 +160,12 @@ namespace {
             if (auto manifest = tbl["manifest"].as_table()) {
                 if (auto val = (*manifest)["url"].value<std::string>()) {
                     snapshot.manifestProvider = *val;
+                }
+                if (auto val = (*manifest)["mirror"].value<std::string>()) {
+                    snapshot.manifestMirror = *val;
+                }
+                if (auto val = (*manifest)["check_interval"].value<int64_t>()) {
+                    snapshot.manifestCheckIntervalHours = static_cast<uint32_t>(std::max<int64_t>(0, *val));
                 }
                 if (auto val = (*manifest)["timeout_resolve_ms"].value<int64_t>())
                     snapshot.manifestTimeouts.resolve = static_cast<uint32_t>(*val);
@@ -247,6 +312,26 @@ namespace {
             cloudEnabled,
             cloudLibrary,
         };
+    }
+
+    bool IsGitHubManifestRepo() {
+        std::lock_guard lock(g_mutex);
+        return gitHubRepoInfo.isGitHub;
+    }
+
+    GitHubRepoInfo GetGitHubManifestRepoInfo() {
+        std::lock_guard lock(g_mutex);
+        return gitHubRepoInfo;
+    }
+
+    std::string GetManifestMirror() {
+        std::lock_guard lock(g_mutex);
+        return manifestMirror;
+    }
+
+    uint32_t GetManifestCheckIntervalHours() {
+        std::lock_guard lock(g_mutex);
+        return manifestCheckIntervalHours;
     }
 
 }
