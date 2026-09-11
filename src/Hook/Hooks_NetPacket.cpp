@@ -1,4 +1,6 @@
 #include "Hooks_NetPacket.h"
+#include "Utils/Config/Config.h"
+#include "Utils/SteamMetadata/GitHubManifestClient.h"
 #include "Utils/SteamMetadata/ManifestClient.h"
 #include "Hooks_Misc.h"
 #include "HookMacros.h"
@@ -519,6 +521,9 @@ namespace Hooks_NetPacket_Manifest {
 
         auto task = std::async(std::launch::async,
             [manifestGid, depotId, appId]() -> uint64 {
+                if (Config::IsGitHubManifestRepo() && appId) {
+                    GitHubManifestClient::EnsureManifestsForApp(appId);
+                }
                 uint64 code = 0;
                 ManifestClient::FetchManifestRequestCode(manifestGid, &code, appId, depotId);
                 return code;

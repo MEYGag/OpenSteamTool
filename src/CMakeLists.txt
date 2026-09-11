@@ -41,6 +41,7 @@ include(Lua)
 include(Spdlog)
 include(Protobuf)
 include(Tomlplusplus)
+include(Zlib)
 include(LogMacros)
 
 # Build the host code generators (ipc_codegen) in their own binary subtree so
@@ -107,11 +108,16 @@ add_library(OpenSteamTool SHARED
     Utils/Config/ConfigFileWatcher.cpp
     Utils/Config/LuaConfig.cpp
     Utils/Config/LuaFileWatcher.cpp
+    Utils/Config/ManifestCacheManager.cpp
     Utils/CloudRedirect/CloudRedirectHost.cpp
     Utils/HookSupport/VehCommon.cpp
     Utils/Logging/Log.cpp
+    Utils/Manifest/ManifestDecompressor.cpp
+    Utils/Manifest/ZipExtractor.cpp
+    Utils/SteamMetadata/GitHubManifestClient.cpp
     Utils/SteamMetadata/IPCLoader.cpp
     Utils/SteamMetadata/ManifestClient.cpp
+    Utils/SteamMetadata/ManifestUpdateScheduler.cpp
     Utils/SteamMetadata/PatternLoader.cpp
     Utils/SteamMetadata/RemoteToml.cpp
     Utils/SteamMetadata/StatsClient.cpp
@@ -157,6 +163,7 @@ target_include_directories(OpenSteamTool PRIVATE
 target_link_libraries(OpenSteamTool PRIVATE
     OSTPlatform
     lua_static
+    zlib_static
     $<$<CONFIG:Debug>:libprotobuf>
     $<$<CONFIG:Release>:libprotobuf-lite>
     tomlplusplus::tomlplusplus

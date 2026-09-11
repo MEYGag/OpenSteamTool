@@ -1,7 +1,11 @@
 #include "Hooks_Manifest.h"
 #include "HookMacros.h"
 #include "dllmain.h"
+#include "Utils/Config/Config.h"
+#include "Utils/Manifest/ManifestDecompressor.h"
+#include "Utils/SteamMetadata/GitHubManifestClient.h"
 #include <format>
+#include <unordered_set>
 
 // ═══════════════════════════════════════════════════════════════════
 //  Manifest override hooks:
@@ -42,10 +46,43 @@ namespace {
 
         if (!result) return result;
 
-        const auto& overrides = LuaConfig::GetManifestOverrides();
-        if (overrides.empty()) return result;
+        // Synchronize manifests on active install or update
+        if (pSteamApp && Config::IsGitHubManifestRepo()) {
+            constexpr uint32 kActiveInstallFlags =
+                k_EAppStateUpdateRequired | k_EAppStateUpdateQueued |
+                k_EAppStateUpdateRunning  | k_EAppStateUpdateStarted |
+                k_EAppStateDownloading    | k_EAppStatePreallocating |
+                k_EAppStateReconfiguring;
 
-        if (pDepotInfo && pDepotInfo->m_Size) {
+            uint32 appState = *reinterpret_cast<const uint32*>(reinterpret_cast<const uint8*>(pSteamApp) + 8);
+            if ((appState & kActiveInstallFlags) != 0) {
+                std::unordered_set<uint32> syncedApps;
+                auto syncApp = [&](uint32 targetAppId) {
+                    if (targetAppId && !syncedApps.contains(targetAppId)) {
+                        syncedApps.insert(targetAppId);
+                        if (LuaConfig::HasDepot(targetAppId, false)) {
+                            LOG_MANIFEST_DEBUG("BuildDepotDependency: syncing manifests for AppID {}", targetAppId);
+                            GitHubManifestClient::EnsureManifestsForApp(targetAppId, false);
+                        }
+                    }
+                };
+
+                syncApp(AppId);
+                if (pDepotInfo) {
+                    for (uint32 i = 0; i < pDepotInfo->m_Size; ++i) {
+                        syncApp(pDepotInfo->m_Memory.m_pMemory[i].AppId);
+                    }
+                }
+                if (pSharedDepotInfo) {
+                    for (uint32 i = 0; i < pSharedDepotInfo->m_Size; ++i) {
+                        syncApp(pSharedDepotInfo->m_Memory.m_pMemory[i].AppId);
+                    }
+                }
+            }
+        }
+
+        const auto& overrides = LuaConfig::GetManifestOverrides();
+        if (!overrides.empty() && pDepotInfo && pDepotInfo->m_Size) {
             for (uint32 i = 0; i < pDepotInfo->m_Size; ++i) {
                 DepotEntry& e = pDepotInfo->m_Memory.m_pMemory[i];
                 auto it = overrides.find(e.DepotId);
@@ -60,6 +97,35 @@ namespace {
                 }
             }
         }
+        if (!overrides.empty() && pSharedDepotInfo && pSharedDepotInfo->m_Size) {
+            for (uint32 i = 0; i < pSharedDepotInfo->m_Size; ++i) {
+                DepotEntry& e = pSharedDepotInfo->m_Memory.m_pMemory[i];
+                auto it = overrides.find(e.DepotId);
+                if (it != overrides.end()) {
+                    uint64_t newSize = it->second.size ? it->second.size : e.ManifestSize;
+                    LOG_MANIFEST_INFO("BuildDepotDependency: patching shared depot {} gid={}->{} size={}->{}",
+                        e.DepotId, e.ManifestGid, it->second.gid,
+                        e.ManifestSize, newSize);
+                    e.ManifestGid  = it->second.gid;
+                    e.ManifestSize = newSize;
+                }
+            }
+        }
+
+        // Sanitize local depotcache manifest files before Steam loads them
+        if (pDepotInfo && pDepotInfo->m_Size) {
+            for (uint32 i = 0; i < pDepotInfo->m_Size; ++i) {
+                const DepotEntry& e = pDepotInfo->m_Memory.m_pMemory[i];
+                ManifestDecompressor::SanitizeDepotManifest(e.DepotId, e.ManifestGid);
+            }
+        }
+        if (pSharedDepotInfo && pSharedDepotInfo->m_Size) {
+            for (uint32 i = 0; i < pSharedDepotInfo->m_Size; ++i) {
+                const DepotEntry& e = pSharedDepotInfo->m_Memory.m_pMemory[i];
+                ManifestDecompressor::SanitizeDepotManifest(e.DepotId, e.ManifestGid);
+            }
+        }
+
         return result;
     }
 

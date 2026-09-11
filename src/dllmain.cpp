@@ -2,8 +2,11 @@
 #include "Hook/HookManager.h"
 #include "Utils/Config/ConfigFileWatcher.h"
 #include "Utils/Config/LuaFileWatcher.h"
+#include "Utils/Config/ManifestCacheManager.h"
 #include "Utils/CloudRedirect/CloudRedirectHost.h"
+#include "Utils/Manifest/ManifestDecompressor.h"
 #include "Utils/SteamMetadata/IPCLoader.h"
+#include "Utils/SteamMetadata/ManifestUpdateScheduler.h"
 #include "Utils/SteamMetadata/PatternLoader.h"
 #include "Utils/SteamMetadata/SteamDiagnostics.h"
 #include "OSTPlatform/include/DynamicLibrary.h"
@@ -56,6 +59,10 @@ static uint32_t InitThread(OSTPlatform::DynamicLibrary::ModuleHandle selfModule)
     Config::Load(ConfigPath);
     Log::InitModules();
     Log::InstallPlatformLogSink();
+
+    ManifestCacheManager::Init(SteamInstallPath);
+    ManifestCacheManager::PruneUninstalledApps();
+
     SteamDiagnostics::Initialize(SteamclientPath, SteamUIPath);
 
     // Load pattern files for steamclient64.dll and steamui.dll.
@@ -86,6 +93,12 @@ static uint32_t InitThread(OSTPlatform::DynamicLibrary::ModuleHandle selfModule)
     // [cloud].enabled is set and cloud_redirect.dll is present.
     CloudRedirectHost::Initialize(SteamInstallPath);
 
+    // Initial pass to sanitize existing local depotcache manifests.
+    ManifestDecompressor::ScanAndSanitizeDepotCache();
+
+    // Start background manifest update scheduler if configured.
+    ManifestUpdateScheduler::Start();
+
     LOG_INFO("OpenSteamTool init complete");
     return 0;
 }
@@ -103,6 +116,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, PVOID pvReserved)
     }
     else if (dwReason == DLL_PROCESS_DETACH)
     {
+        ManifestUpdateScheduler::Stop();
         ConfigFileWatcher::Stop();
         LuaFileWatcher::Stop();
         SteamUI::CoreUnhook();

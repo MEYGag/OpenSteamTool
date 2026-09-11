@@ -163,7 +163,7 @@ Result Execute(const wchar_t* method,
                 break;
             }
             r.body.resize(off + read);
-            if (r.body.size() > 256 * 1024) break;
+            if (r.body.size() > 64 * 1024 * 1024) break;
         }
 
         if (r.status < 200 || r.status >= 300) {

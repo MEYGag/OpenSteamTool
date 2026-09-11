@@ -73,6 +73,7 @@ namespace LuaConfig{
     static void RebuildManifestOverride(uint64_t depotId) {
         const ManifestOverride* best = nullptr;
         uint64_t bestSeq = 0;
+        bool bestIsAutoCache = false;
 
         for (const auto& [file, overrides] : g_fileManifestOverrides) {
             auto overrideIt = overrides.find(depotId);
@@ -81,7 +82,19 @@ namespace LuaConfig{
             auto seqIt = g_fileParseSequence.find(file);
             if (seqIt == g_fileParseSequence.end()) continue;
 
-            if (!best || seqIt->second > bestSeq) {
+            bool isAutoCache = file.ends_with("manifestcache.lua");
+
+            if (!best) {
+                best = &overrideIt->second;
+                bestSeq = seqIt->second;
+                bestIsAutoCache = isAutoCache;
+            } else if (bestIsAutoCache && !isAutoCache) {
+                // User-defined lua files always take precedence over auto-generated manifestcache.lua
+                best = &overrideIt->second;
+                bestSeq = seqIt->second;
+                bestIsAutoCache = false;
+            } else if (bestIsAutoCache == isAutoCache && seqIt->second > bestSeq) {
+                // Within the same tier, latest parsed file wins
                 best = &overrideIt->second;
                 bestSeq = seqIt->second;
             }

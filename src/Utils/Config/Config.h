@@ -33,6 +33,12 @@ namespace Config {
 
     LoadResult Load(const std::string& configPath);
 
+    struct GitHubRepoInfo {
+        bool isGitHub = false;
+        std::string owner;
+        std::string repo;
+    };
+
     ManifestTimeouts GetManifestTimeouts();
     LogLevel GetLogLevel();
     std::string GetLogDir();
@@ -41,12 +47,20 @@ namespace Config {
     InjectionSettings GetInjectionSettings();
     CloudSettings GetCloudSettings();
     bool GetStatsEnableApi();
+    bool IsGitHubManifestRepo();
+    GitHubRepoInfo GetGitHubManifestRepoInfo();
+    std::string GetManifestMirror();
+    uint32_t GetManifestCheckIntervalHours();
 
-    // [manifest] — provider selection lives in ManifestClient (table-driven).
+    // [manifest]
     inline uint32_t manifestTimeoutResolve = 5000;
     inline uint32_t manifestTimeoutConnect = 5000;
     inline uint32_t manifestTimeoutSend    = 10000;
     inline uint32_t manifestTimeoutRecv    = 10000;
+    inline std::string manifestUrl         = "opensteamtool";
+    inline std::string manifestMirror;
+    inline uint32_t manifestCheckIntervalHours = 6;
+    inline GitHubRepoInfo gitHubRepoInfo;
 
     // [log]
     inline LogLevel logLevel = LogLevel::Debug;
