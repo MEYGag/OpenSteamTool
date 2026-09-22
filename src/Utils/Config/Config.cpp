@@ -51,7 +51,7 @@ namespace {
             size_t slash = s.find('/');
             if (slash != std::string::npos && slash > 0 && slash < s.size() - 1 &&
                 s.find('/', slash + 1) == std::string::npos &&
-                s != "opensteamtool" && s != "wudrm" && s != "steamrun") {
+                s != "opensteamtool" && s != "wudrm" && s != "steamrun" && s != "manifestdex") {
                 startPos = 0;
             } else {
                 return info;

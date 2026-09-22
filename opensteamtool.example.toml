@@ -13,6 +13,7 @@ level = "debug"
 #    "opensteamtool" → https://manifest.opensteamtool.com/{gid}   (default)
 #    "wudrm"         → http://gmrc.wudrm.com/manifest/{gid} (recommended for China users)
 #    "steamrun"      → https://manifest.steam.run/api/manifest/{gid}
+#    "manifestdex"   → https://manifest.manifestdex.com/{gid}
 #
 # 2. GitHub Manifest Repository (Automatic Manifest Sync):
 #    Set to a GitHub repository to automatically download branch manifests on install,
@@ -28,11 +29,11 @@ level = "debug"
 # http_post(url, body [, headers]) to Lua scripts.  Both return
 # (body_string, status_code) on success, or (nil, error_msg) on failure.
 #
-# -- Example: try wudrm (plain-text uint64), fall back to steamrun (JSON).
+# -- Example: try manifestdex (plain-text uint64), fall back to steamrun (JSON).
 # -- Return a digit *string* to avoid double-precision loss > 2^53.
 # function fetch_manifest_code(gid)
-#     -- wudrm responds with e.g. "10570517747114638659"
-#     local body, st = http_get("http://gmrc.wudrm.com/manifest/" .. gid)
+#     -- manifestdex responds with e.g. "5191741311888999039"
+#     local body, st = http_get("https://manifest.manifestdex.com/" .. gid, {["User-Agent"] = "ManifestDeX/1.0"})
 #     if st == 200 and body then return body end
 #     -- steamrun responds with {"content":"1666836470726104466"}
 #     body, st = http_get("https://manifest.steam.run/api/manifest/" .. gid)

@@ -15,6 +15,9 @@ namespace ManifestClient {
     using Parser = bool (*)(std::string_view body, uint64_t* out);
 
     static bool ParsePlainUint(std::string_view body, uint64_t* out) {
+        while (!body.empty() && (body.front() == ' ' || body.front() == '\t' || body.front() == '\r' || body.front() == '\n')) {
+            body.remove_prefix(1);
+        }
         uint64_t code = 0;
         auto [_, ec] = std::from_chars(body.data(), body.data() + body.size(), code);
         if (ec != std::errc{}) return false;
@@ -42,16 +45,18 @@ namespace ManifestClient {
         std::string_view name;          // matches [manifest] url = "..."
         const char*      urlTemplate;   // full literal with one %llu — for log & path
         Parser           parse;
+        const wchar_t*   headers = nullptr;
     };
 
-    consteval Provider Make(std::string_view name, const char* url, Parser parse) {
-        return {name, url, parse};
+    consteval Provider Make(std::string_view name, const char* url, Parser parse, const wchar_t* headers = nullptr) {
+        return {name, url, parse, headers};
     }
 
     static constexpr Provider kProviders[] = {
         Make("opensteamtool", "https://manifest.opensteamtool.com/%llu",       ParsePlainUint),
         Make("wudrm",         "http://gmrc.wudrm.com/manifest/%llu",           ParsePlainUint),
         Make("steamrun",      "https://manifest.steam.run/api/manifest/%llu",  ParseSteamRunJson),
+        Make("manifestdex",   "https://manifest.manifestdex.com/%llu",         ParsePlainUint, L"User-Agent: ManifestDeX/1.0\r\n"),
     };
 
     static const Provider* g_active = &kProviders[0];   // opensteamtool
@@ -92,7 +97,7 @@ namespace ManifestClient {
             urlLog,
             nullptr,
             0,
-            nullptr,
+            p.headers,
             timeouts.resolve,
             timeouts.connect,
             timeouts.send,
