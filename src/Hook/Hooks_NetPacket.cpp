@@ -15,6 +15,13 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+#if defined(_WIN32)
+#include <excpt.h>
+#endif
+
+#ifndef EXCEPTION_EXECUTE_HANDLER
+#define EXCEPTION_EXECUTE_HANDLER 1
+#endif
 
 #include "steam_messages.pb.h"
 
@@ -57,11 +64,36 @@ namespace {
 
 
     // ── Packet layout ──────────────────────────────────────────
+    inline bool IsValidUserBuffer(const void* ptr, size_t size) {
+        if (!ptr || size < sizeof(MsgHdr)) return false;
+        const uintptr_t addr = reinterpret_cast<uintptr_t>(ptr);
+        // Exclude null/low pages (< 64KB), 32-bit sign-extended/sentinel values (e.g. 0xFFFFFFFF, -1),
+        // and addresses outside Windows 64-bit user-mode address space.
+        if (addr < 0x10000ULL || addr == 0xFFFFFFFFULL || addr == ~0ULL) return false;
+        if (addr > 0x7FFFFFFEFFFFULL) return false;
+        if (addr + size < addr || (addr + size) > 0x7FFFFFFFFFFFULL) return false;
+        return true;
+    }
+
+    static bool SafeReadMsgHdr(const uint8* data, MsgHdr& outHdr) {
+#if defined(_MSC_VER)
+        __try {
+            outHdr = *reinterpret_cast<const MsgHdr*>(data);
+            return true;
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+#else
+        outHdr = *reinterpret_cast<const MsgHdr*>(data);
+        return true;
+#endif
+    }
+
     inline bool UnpackRaw(const uint8* data, uint32 size,
                           EMsg& eMsg, const uint8*& pHdr, uint32& cbHdr,
                           const uint8*& pBody, uint32& cbBody)
     {
-        if (!data || size < sizeof(MsgHdr)) {
+        if (!IsValidUserBuffer(data, size)) {
         fail:
             eMsg = static_cast<EMsg>(0);
             cbHdr = 0;
@@ -70,11 +102,12 @@ namespace {
             cbBody = 0;
             return false;
         }
-        const MsgHdr* hdr = reinterpret_cast<const MsgHdr*>(data);
-        if (!(hdr->eMsg & kMsgHdrProtoFlag)) goto fail;
+        MsgHdr hdr{};
+        if (!SafeReadMsgHdr(data, hdr)) goto fail;
+        if (!(hdr.eMsg & kMsgHdrProtoFlag)) goto fail;
 
-        eMsg  = static_cast<EMsg>(hdr->eMsg & ~kMsgHdrProtoFlag);
-        cbHdr = hdr->headerLength;
+        eMsg  = static_cast<EMsg>(hdr.eMsg & ~kMsgHdrProtoFlag);
+        cbHdr = hdr.headerLength;
         uint32 off = sizeof(MsgHdr) + cbHdr;
         if (off > size) goto fail;
         pHdr   = data + sizeof(MsgHdr);
@@ -1288,7 +1321,7 @@ namespace {
               void* pObject, EWebSocketOpCode eWebSocketOpCode,
               uint8* pubData, uint32 cubData)
     {
-        if (eWebSocketOpCode != k_eWebSocketOpCode_Binary)
+        if (eWebSocketOpCode != k_eWebSocketOpCode_Binary || !IsValidUserBuffer(pubData, cubData))
             return oBBuildAndAsyncSendFrame(pObject, eWebSocketOpCode, pubData, cubData);
 
         EMsg eMsg;
@@ -1323,6 +1356,8 @@ namespace {
 
     HOOK_FUNC(RecvPkt, void*, void* pThis, CNetPacket* pPacket)
     {
+        if (!pPacket || !IsValidUserBuffer(pPacket->m_pubData, pPacket->m_cubData))
+            return oRecvPkt(pThis, pPacket);
         Hooks_NetPacket_RichPresence::TryInject(
             pThis, pPacket,
             [](void* pT, CNetPacket* pP) -> bool { return oRecvPkt(pT, pP) != nullptr; });

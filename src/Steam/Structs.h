@@ -209,6 +209,8 @@ using KeyValuesSystemSteam_t = IKeyValuesSystem* (*)();
 struct CNetPacket
 {
 	HCONNECTION m_hConnection;
+	uint32 m_nVersionStamp1;
+	uint32 m_nVersionStamp2;
 	uint8* m_pubData;
 	uint32 m_cubData;
 	int32 m_cRef;
